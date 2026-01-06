@@ -4,10 +4,26 @@ import auth, { UserRole } from "../../middlewares/auth";
 
 const router = express.Router();
 
+router.get("/:commentId", commentController.getCommentById);
+
+router.get("/author/:authorId", commentController.getCommentByAuthorId);
+
 router.post(
   "/",
   auth(UserRole.ADMIN, UserRole.USER),
   commentController.createComment
+);
+
+router.delete(
+  "/:commentId",
+  auth(UserRole.ADMIN, UserRole.USER),
+  commentController.deleteComment
+);
+
+router.patch(
+  "/:commentId",
+  auth(UserRole.ADMIN, UserRole.USER),
+  commentController.updateComment
 );
 
 export const commentRouter: Router = router;
