@@ -1,4 +1,8 @@
-import { CommentStatus, Post, PostStatus } from "../../../generated/prisma/client";
+import {
+  CommentStatus,
+  Post,
+  PostStatus,
+} from "../../../generated/prisma/client";
 import { PostWhereInput } from "../../../generated/prisma/models";
 import { prisma } from "../../lib/prisma";
 
@@ -101,13 +105,13 @@ const getAllPost = async ({
     orderBy: {
       [sortBy]: sortOrder,
     },
-    include:{
-      _count:{
-        select:{
-          comments: true
-        }
-      }
-    }
+    include: {
+      _count: {
+        select: {
+          comments: true,
+        },
+      },
+    },
   });
 
   const total = await prisma.post.count({
@@ -143,65 +147,64 @@ const getPostById = async (postId: string) => {
       where: {
         id: postId,
       },
-      include:{
+      include: {
         comments: {
-          where:{
+          where: {
             parentId: null,
-            status: CommentStatus.APPROVED
+            status: CommentStatus.APPROVED,
           },
-          orderBy: {createdAt: 'desc'},
+          orderBy: { createdAt: "desc" },
           include: {
             replies: {
-              where:{
-                status:CommentStatus.APPROVED
+              where: {
+                status: CommentStatus.APPROVED,
               },
-              orderBy: {createdAt: 'asc'},
-              include:{
+              orderBy: { createdAt: "asc" },
+              include: {
                 replies: {
-                  where:{
-                    status: CommentStatus.APPROVED
-                  }
-                }
-              }
-            }
-          }
+                  where: {
+                    status: CommentStatus.APPROVED,
+                  },
+                },
+              },
+            },
+          },
         },
-        _count:{
-          select: {comments: true}
-        }
-      }
+        _count: {
+          select: { comments: true },
+        },
+      },
     });
     return postData;
   });
   return result;
 };
 
-
-const getMyPosts = async(authorId: string) =>{
-   await prisma.user.findUniqueOrThrow({
-    where:{
+const getMyPosts = async (authorId: string) => {
+  await prisma.user.findUniqueOrThrow({
+    where: {
       id: authorId,
-      status: "ACTIVE"
+      status: "ACTIVE",
     },
-    select:{
-      id: true
-    }
-  })
+    select: {
+      id: true,
+    },
+  });
 
   const result = await prisma.post.findMany({
-    where:{
-      authorId
+    where: {
+      authorId,
     },
     orderBy: {
-      createdAt: "desc"
+      createdAt: "desc",
     },
-    include:{
+    include: {
       _count: {
-        select:{
-          comments: true
-        }
-      }
-    }
+        select: {
+          comments: true,
+        },
+      },
+    },
   });
 
   // const total = await prisma.post.aggregate({
@@ -214,34 +217,109 @@ const getMyPosts = async(authorId: string) =>{
   // })
 
   return result;
-    
-}
+};
 
+// user- sudhu nijar post update korta parba, IsFeatured update korta parba na
+// admin - sobar post update korta parba
 
-const updatePost = async(postId: string, data: Partial<Post>, authorId: string) =>{
+const updatePost = async (
+  postId: string,
+  data: Partial<Post>,
+  authorId: string,
+  isAdmin: boolean
+) => {
   const postData = await prisma.post.findUniqueOrThrow({
-    where:{
-      id: postId
+    where: {
+      id: postId,
     },
-    select:{
+    select: {
       id: true,
-      authorId: true
-    }
-  })
-  if(postData.authorId !== authorId){
-    throw new Error("You are not Owner/ create Of the post !")
+      authorId: true,
+    },
+  });
+  if (!isAdmin && postData.authorId !== authorId) {
+    throw new Error("You are not Owner/ create Of the post !");
+  }
+
+  if (!isAdmin) {
+    delete data.isFeatured;
   }
 
   const result = await prisma.post.update({
-    where:{
+    where: {
       id: postData.id,
     },
-    data
-  })
+    data,
+  });
 
   return result;
-}
+};
 
+// 1. user - nijar create post delete korta parba
+// 2. admin - sobar post delete korta parbe
+
+const deletePost = async (
+  postId: string,
+  authorId: string,
+  isAdmin: boolean
+) => {
+  const postData = await prisma.post.findUniqueOrThrow({
+    where: {
+      id: postId,
+    },
+    select: {
+      id: true,
+      authorId: true,
+    },
+  });
+
+  if (!isAdmin && postData.authorId !== authorId) {
+    throw new Error("You are not delete Of the post !");
+  }
+  return await prisma.post.delete({
+    where: {
+      id: postId,
+    },
+  });
+};
+
+const getStats = async () => {
+  // Post Count, published Posts, draftPosts, totalComments, totalViews
+
+  return await prisma.$transaction(async (tx) => {
+    const [totalPost, publishedPosts, draftPosts, archivedPosts, totalComments, approvedComment, rejectComment, totalUsers, adminCount, userCount, totalViews ] =
+      await Promise.all([
+        await tx.post.count(),
+        await tx.post.count({ where: { status: PostStatus.PUBLISHED} }),
+        await tx.post.count({where: {status: PostStatus.DRAFT} }),
+        await tx.post.count({where: {status: PostStatus.ARCHIVED } }),
+        await tx.comment.count(),
+        await tx.comment.count({where: {status: CommentStatus.APPROVED}}),
+        await tx.comment.count({where:{status: CommentStatus.REJECT}}),
+        await tx.user.count(),
+        await tx.user.count({where:{role: "ADMIN"}}),
+        await tx.user.count({where:{role: 'USER'}}),
+        await tx.post.aggregate({
+          _sum:{views: true}
+        })
+
+      ]);
+
+    return {
+      totalPost,
+      publishedPosts,
+      draftPosts,
+      archivedPosts,
+      totalComments,
+      approvedComment,
+      rejectComment,
+      totalUsers, 
+      adminCount, 
+      userCount ,
+      totalViews: totalViews._sum.views
+    };
+  });
+};
 
 export const postService = {
   createPost,
@@ -249,4 +327,6 @@ export const postService = {
   getPostById,
   getMyPosts,
   updatePost,
+  deletePost,
+  getStats,
 };
