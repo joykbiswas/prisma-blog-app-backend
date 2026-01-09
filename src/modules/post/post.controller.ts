@@ -1,11 +1,11 @@
 // import { SortOrder } from './../../../generated/prisma/internal/prismaNamespaceBrowser';
-import { Request, Response } from "express";
+import { NextFunction, Request, Response } from "express";
 import { postService } from "./post.service";
 import { PostStatus } from "../../../generated/prisma/enums";
 import paginationSortingHelper from "../../helpers/paginationSortingHelper";
 import { UserRole } from "../../middlewares/auth";
 
-const createPost = async (req: Request, res: Response) => {
+const createPost = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
     if (!user) {
@@ -17,10 +17,7 @@ const createPost = async (req: Request, res: Response) => {
     const result = await postService.createPost(req.body, user.id as string);
     res.status(201).json(result);
   } catch (err) {
-    res.status(400).json({
-      error: "Post create failed",
-      details: err,
-    });
+   next(err)
   }
 };
 
@@ -78,7 +75,7 @@ const getAllPost = async (req: Request, res: Response) => {
 const getPostById = async (req: Request, res: Response) => {
   try {
     const { postId } = req.params;
-    console.log({ postId });
+    
     if (!postId) {
       throw new Error("Post Id is required");
     }
@@ -109,7 +106,7 @@ const getMyPosts = async (req: Request, res: Response) => {
   }
 };
 
-const updatePost = async (req: Request, res: Response) => {
+const updatePost = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const user = req.user;
 
@@ -128,12 +125,13 @@ const updatePost = async (req: Request, res: Response) => {
     );
     res.status(200).json(result);
   } catch (err) {
-    const errorMessage =
-      err instanceof Error ? err.message : "Post Update failed";
-    res.status(400).json({
-      error: errorMessage,
-      details: err,
-    });
+    // const errorMessage =
+    //   err instanceof Error ? err.message : "Post Update failed";
+    // res.status(400).json({
+    //   error: errorMessage,
+    //   details: err,
+    // });
+    next(err)
   }
 };
 
